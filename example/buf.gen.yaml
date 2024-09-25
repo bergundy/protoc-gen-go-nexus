@@ -1,0 +1,15 @@
+version: v2
+clean: true
+managed:
+  enabled: true
+plugins:
+  - remote: buf.build/protocolbuffers/go
+    out: gen
+    opt:
+      - paths=source_relative
+  - local: protoc-gen-nexus
+    out: gen
+    strategy: all
+    opt:
+      - paths=source_relative
+      - lang=go

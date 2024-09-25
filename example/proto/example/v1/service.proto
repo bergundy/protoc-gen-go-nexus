@@ -1,0 +1,32 @@
+syntax="proto3";
+
+package example.v1;
+
+import "google/protobuf/empty.proto";
+import "nexus/v1/options.proto";
+
+option go_package = "github.com/bergundy/protoc-gen-nexus/example/gen/example/v1;example";
+
+message ExampleInput {
+  string foo = 1;
+}
+
+message ExampleOutput {
+  string foo = 1;
+}
+
+service OneWay {
+  rpc NoInput(google.protobuf.Empty) returns (ExampleOutput);
+
+  rpc NoOutput(ExampleInput) returns (google.protobuf.Empty);
+}
+
+service TwoWay {
+  // Also test options.
+  option (nexus.v1.service).name = "example.v1.two-way";
+
+  rpc Example(ExampleInput) returns (ExampleOutput) {
+    // Also test options.
+    option (nexus.v1.operation).name = "example";
+  }
+}
