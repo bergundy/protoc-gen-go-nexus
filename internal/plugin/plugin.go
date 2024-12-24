@@ -156,22 +156,6 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 	}
 	f.Type().Id(ifaceName).Interface(statements...)
 
-	f.Func().Id(fmt.Sprintf("Register%s", ifaceName)).Params(
-		jen.Id("r").Op("*").Qual(nexusPkg, "ServiceRegistry"),
-		jen.Id("h").Id(ifaceName),
-	).Error().
-		BlockFunc(func(g *jen.Group) {
-			g.Id("svc").Op(":=").Qual(nexusPkg, "NewService").Call(jen.Id(fmt.Sprintf("%sServiceName", svc.GoName)))
-			g.Id("err").Op(":=").Id("svc").Dot("Register").CallFunc(func(g *jen.Group) {
-				for _, method := range svc.Methods {
-					g.Id("h").Dot(method.GoName).Call(jen.Id(operationNameConst(svc, method)))
-				}
-			})
-			g.If().Id("err").Op("!=").Nil().Block(jen.Return().Id("err"))
-
-			g.Return().Id("r").Dot("Register").Call(jen.Id("svc"))
-		})
-
 	f.Func().Id(fmt.Sprintf("New%sNexusService", svc.GoName)).Params(
 		jen.Id("h").Id(ifaceName),
 	).Params(jen.Op("*").Qual(nexusPkg, "Service"), jen.Error()).
@@ -255,8 +239,8 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		})
 
 	for _, method := range svc.Methods {
-		syncMethodName := fmt.Sprintf("Execute%s", method.GoName)
-		asyncMethodName := fmt.Sprintf("Start%s", method.GoName)
+		syncMethodName := method.GoName
+		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
 		input, output := methodIO(method)
 
 		hasInput := method.Input.Desc.FullName() != "google.protobuf.Empty"
@@ -331,7 +315,6 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 					g.Return().Id("err")
 				}
 			})
-
 	}
 }
 

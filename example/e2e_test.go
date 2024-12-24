@@ -38,10 +38,10 @@ func TestTwoWay(t *testing.T) {
 		BaseURL: baseURL,
 	})
 	require.NoError(t, err)
-	output, err := c.ExecuteExample(ctx, &example.ExampleInput{Foo: "bar"}, nexus.ExecuteOperationOptions{})
+	output, err := c.Example(ctx, &example.ExampleInput{Foo: "bar"}, nexus.ExecuteOperationOptions{})
 	require.NoError(t, err)
 	require.Equal(t, "bar", output.Foo)
-	result, err := c.StartExample(ctx, &example.ExampleInput{Foo: "bar"}, nexus.StartOperationOptions{})
+	result, err := c.ExampleAsync(ctx, &example.ExampleInput{Foo: "bar"}, nexus.StartOperationOptions{})
 	require.NoError(t, err)
 	require.Equal(t, "bar", result.Successful.Foo)
 }
@@ -77,16 +77,16 @@ func TestOneWay(t *testing.T) {
 		BaseURL: baseURL,
 	})
 	require.NoError(t, err)
-	err = c.ExecuteNoOutput(ctx, &example.ExampleInput{Foo: "bar"}, nexus.ExecuteOperationOptions{})
+	err = c.NoOutput(ctx, &example.ExampleInput{Foo: "bar"}, nexus.ExecuteOperationOptions{})
 	require.NoError(t, err)
-	noOutResult, err := c.StartNoOutput(ctx, &example.ExampleInput{Foo: "bar"}, nexus.StartOperationOptions{})
+	noOutResult, err := c.NoOutputAsync(ctx, &example.ExampleInput{Foo: "bar"}, nexus.StartOperationOptions{})
 	require.NoError(t, err)
 	require.Nil(t, noOutResult.Pending)
 
-	output, err := c.ExecuteNoInput(ctx, nexus.ExecuteOperationOptions{})
+	output, err := c.NoInput(ctx, nexus.ExecuteOperationOptions{})
 	require.NoError(t, err)
 	require.Equal(t, "bar", output.Foo)
-	noInResult, err := c.StartNoInput(ctx, nexus.StartOperationOptions{})
+	noInResult, err := c.NoInputAsync(ctx, nexus.StartOperationOptions{})
 	require.NoError(t, err)
 	require.Equal(t, "bar", noInResult.Successful.Foo)
 }

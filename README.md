@@ -103,6 +103,111 @@ plugins:
 buf generate
 ```
 
+### Create a handler and serve on localhost:7243
+
+`server/main.go`
+
+```go
+package main
+
+import (
+        "context"
+        "log"
+        "net"
+        "net/http"
+
+        "github.com/bergundy/greet-nexus-example/gen/example/v1"
+        "github.com/bergundy/greet-nexus-example/gen/example/v1/examplenexus"
+        "github.com/nexus-rpc/sdk-go/contrib/nexusproto"
+        "github.com/nexus-rpc/sdk-go/nexus"
+)
+
+type handler struct {
+        examplenexus.UnimplementedGreetingNexusServiceHandler
+}
+
+func (h *handler) Greet(name string) nexus.Operation[*example.GreetInput, *example.GreetOutput] {
+        return nexus.NewSyncOperation(name, func(ctx context.Context, input *example.GreetInput, options nexus.StartOperationOptions) (*example.GreetOutput, error) {
+                return &example.GreetOutput{
+                        Greeting: "Hello, " + input.Name,
+                }, nil
+        })
+}
+
+func main() {
+        service, err := examplenexus.NewGreetingNexusService(&handler{})
+        if err != nil {
+                log.Fatal(err)
+        }
+	        if err != nil {
+                log.Fatal(err)
+        }
+        registry := nexus.NewServiceRegistry()
+        if err := registry.Register(service); err != nil {
+                log.Fatal(err)
+        }
+        rh, err := registry.NewHandler()
+        if err != nil {
+                log.Fatal(err)
+        }
+        h := nexus.NewHTTPHandler(nexus.HandlerOptions{
+                Handler:    rh,
+                Serializer: nexusproto.Serializer(nexusproto.SerializerModePreferJSON),
+        })
+
+        listener, err := net.Listen("tcp", "localhost:7243")
+        if err != nil {
+                log.Fatal(err)
+        }
+        defer listener.Close()
+        if err = http.Serve(listener, h); err != nil {
+                log.Fatal(err)
+        }
+}
+```
+
+`go run ./server`
+
+### Execute an operation with the generated client
+
+`client/main.go`
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/bergundy/greet-nexus-example/gen/example/v1"
+	"github.com/bergundy/greet-nexus-example/gen/example/v1/examplenexus"
+	"github.com/nexus-rpc/sdk-go/nexus"
+)
+
+func main() {
+	ctx := context.Background()
+	c, err := examplenexus.NewGreetingNexusHTTPClient(nexus.HTTPClientOptions{
+		BaseURL: "http://localhost:7243",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	output, err := c.Greet(ctx, &example.GreetInput{Name: "World"}, nexus.ExecuteOperationOptions{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("got sync greeting:", output.Greeting)
+	result, err := c.GreetAsync(ctx, &example.GreetInput{Name: "World"}, nexus.StartOperationOptions{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("got async greeting:", result.Successful.Greeting)
+}
+```
+
+`go run ./client`
+
 ## Options
 
 ### Service
