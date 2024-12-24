@@ -47,7 +47,9 @@ jobs:
 
       # This should have already been generated, verify that it doesn't change in CI.
       - name: Generate the proto extension's Go code
-        run: buf generate
+        run: |
+          buf generate
+          git diff --exit-code
 
       - name: Build plugin
         run: go build ./cmd/...
