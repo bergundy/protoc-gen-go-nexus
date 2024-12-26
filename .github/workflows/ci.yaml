@@ -34,9 +34,10 @@ jobs:
       - name: Download buf and run checks
         uses: bufbuild/buf-action@v1
         with:
-          # Don't push without running tests.
+          # Don't push, this isn't a library, just an example.
           push: false
-          breaking: true
+          # Don't check for breaking, this isn't a library, just an example.
+          breaking: false
 
       - name: Install protoc
         uses: arduino/setup-protoc@v3
@@ -45,18 +46,11 @@ jobs:
           version: '23.x'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # This should have already been generated, verify that it doesn't change in CI.
-      - name: Generate the proto extension's Go code
-        run: |
-          buf generate
-          git diff --exit-code
-
       - name: Build plugin
         run: go build ./cmd/...
 
       - name: Generate code
-        run: PATH=${PWD}/..:${PATH} buf generate
-        working-directory: example
+        run: PATH=${PWD}:${PATH} buf generate
 
       - name: Lint
         uses: golangci/golangci-lint-action@v6
