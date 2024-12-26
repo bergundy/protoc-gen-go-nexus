@@ -26,14 +26,10 @@ var multiLineValues = jen.Options{
 	Separator: ",",
 }
 
-type Options struct {
-}
-
 type Plugin struct {
 	*protogen.Plugin
 	version string
 	commit  string
-	options Options
 	flags   *pflag.FlagSet
 }
 
