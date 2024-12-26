@@ -1,25 +1,20 @@
-# protoc-gen-nexus
+# protoc-gen-go-nexus
 
-A Protobuf plugin for generating Nexus code.
+A Protobuf plugin for generating Nexus Go clients and handlers.
 
 **⚠️ EXPERIMENTAL: Generated code structure is subject to change as feedback is collected. ⚠️**
-
-Supported languages:
-
-- Golang
-- Java (TBD)
 
 ## Installation
 
 ### From GitHub releases (recommended)
 
-1. Download an archive from the [latest release](https://github.com/bergundy/protoc-gen-nexus/releases/latest).
+1. Download an archive from the [latest release](https://github.com/bergundy/protoc-gen-go-nexus/releases/latest).
 2. Extract and add to your system's path.
 
 ### Using go install
 
 ```
-go install github.com/bergundy/protoc-gen-nexus/cmd/protoc-gen-nexus@latest
+go install github.com/bergundy/protoc-gen-go-nexus/cmd/protoc-gen-go-nexus@latest
 ```
 
 ## Usage
@@ -51,6 +46,11 @@ service Greeting {
 }
 ```
 
+### Customize code generation
+
+Follow the instructions in [nexus-proto-annotations](https://github.com/bergundy/nexus-proto-annotations) for modifying
+the service and operation names.
+
 ### Create `buf` config files
 
 > NOTE: Alternatively you may use protoc directly.
@@ -62,7 +62,7 @@ version: v2
 modules:
   - path: .
 deps:
-  - buf.build/bergundy/protoc-gen-nexus
+  - buf.build/bergundy/nexus
 lint:
   use:
     - BASIC
@@ -89,12 +89,11 @@ plugins:
     out: gen
     opt:
       - paths=source_relative
-  - local: protoc-gen-nexus
+  - local: protoc-gen-go-nexus
     out: gen
     strategy: all
     opt:
       - paths=source_relative
-      - lang=go
 ```
 
 ### Generate code 
@@ -208,66 +207,12 @@ func main() {
 
 `go run ./client`
 
-## Options
-
-### Service
-
-#### (nexus.v1.service).name
-
-`string`
-
-Defines the Nexus Service name. Defaults to the proto Service full name.
-
-**Example:**
-
-```protobuf
-syntax = "proto3";
-
-package example.v1;
-
-import "nexus/v1/options.proto";
-
-service ExampleService {
-  option (nexus.v1.service).name = "example.v1.Example";
-}
-```
-
-### Method
-
-#### (nexus.v1.operation).name
-
-`string`
-
-Defines the Nexus Operation name. Defaults to the proto Method name.
-
-**Example:**
-
-```protobuf
-syntax = "proto3";
-
-package example.v1;
-
-import "nexus/v1/options.proto";
-
-service ExampleService {
-  rpc Foo(FooInput) returns (FooResponse) {
-	option (nexus.v1.operation).name = "foo";
-  }
-}
-```
-
 ## Contributing
 
 ### Prerequisites
 
 - Go >=1.23
 - [Buf](https://buf.build/docs/installation/)
-
-### Generate the proto extension's Go code
-
-```
-rm -rf ./gen && buf generate
-```
 
 ### Build the plugin
 
@@ -278,7 +223,7 @@ go build ./cmd/...
 ### Generate example code from protos
 
 ```
-(cd example && PATH=${PWD}/..:${PATH} buf generate)
+PATH=${PWD}:${PATH} buf generate
 ```
 
 ### Run sanity tests

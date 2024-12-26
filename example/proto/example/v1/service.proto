@@ -5,7 +5,7 @@ package example.v1;
 import "google/protobuf/empty.proto";
 import "nexus/v1/options.proto";
 
-option go_package = "github.com/bergundy/protoc-gen-nexus/example/gen/example/v1;example";
+option go_package = "github.com/bergundy/protoc-gen-go-nexus/example/gen/example/v1;example";
 
 message ExampleInput {
   string foo = 1;

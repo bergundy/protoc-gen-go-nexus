@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bergundy/protoc-gen-nexus/example/gen/example/v1"
-	examplenexus "github.com/bergundy/protoc-gen-nexus/example/gen/example/v1/examplenexus"
+	"github.com/bergundy/protoc-gen-go-nexus/example/gen/example/v1"
+	examplenexus "github.com/bergundy/protoc-gen-go-nexus/example/gen/example/v1/examplenexus"
 	"github.com/nexus-rpc/sdk-go/contrib/nexusproto"
 	"github.com/nexus-rpc/sdk-go/nexus"
 	"github.com/stretchr/testify/require"

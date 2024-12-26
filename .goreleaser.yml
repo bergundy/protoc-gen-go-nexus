@@ -11,7 +11,7 @@ release:
 
 archives:
   - <<: &archive_defaults
-      name_template: "protoc-gen-nexus-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+      name_template: "protoc-gen-go-nexus-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
     id: nix
     builds:
       - nix
@@ -29,8 +29,8 @@ archives:
 
 builds:
   - <<: &build_defaults
-      dir: cmd/protoc-gen-nexus
-      binary: protoc-gen-nexus
+      dir: cmd/protoc-gen-go-nexus
+      binary: protoc-gen-go-nexus
       ldflags:
         - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}}
       goarch:

@@ -2,13 +2,13 @@ version: v2
 clean: true
 managed:
   enabled: true
-  override:
-  - file_option: go_package_prefix
-    value: github.com/bergundy/protoc-gen-nexus/gen
 plugins:
   - remote: buf.build/protocolbuffers/go
-    out: gen
+    out: example/gen
     opt:
       - paths=source_relative
-inputs:
-  - directory: proto
+  - local: protoc-gen-go-nexus
+    out: example/gen
+    strategy: all
+    opt:
+      - paths=source_relative

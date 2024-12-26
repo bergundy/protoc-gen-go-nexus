@@ -1,4 +1,4 @@
-protoc-gen-nexus
+protoc-gen-go-nexus
 
 MIT License
 

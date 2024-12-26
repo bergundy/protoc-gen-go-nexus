@@ -1,7 +1,8 @@
 version: v2
 modules:
-  - name: buf.build/bergundy/protoc-gen-nexus
-    path: proto
+  - path: example/proto
+deps:
+  - buf.build/bergundy/nexus
 lint:
   use:
     - BASIC
