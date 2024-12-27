@@ -129,7 +129,7 @@ func (p *Plugin) genConsts(f *jen.File, svc *protogen.Service) {
 }
 
 func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
-	ifaceName := fmt.Sprintf("%sNexusServiceHandler", svc.GoName)
+	ifaceName := fmt.Sprintf("%sNexusHandler", svc.GoName)
 	unimplementedHandlerName := fmt.Sprintf("Unimplemented%s", ifaceName)
 
 	statements := []jen.Code{

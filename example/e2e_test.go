@@ -16,10 +16,10 @@ import (
 )
 
 type twoWayHandler struct {
-	examplenexus.UnimplementedTwoWayNexusServiceHandler
+	examplenexus.UnimplementedTwoWayNexusHandler
 }
 
-// Example implements examplenexus.TwoWayNexusServiceHandler.
+// Example implements examplenexus.TwoWayNexusHandler.
 func (t *twoWayHandler) Example(name string) nexus.Operation[*example.ExampleInput, *example.ExampleOutput] {
 	return nexus.NewSyncOperation(name, func(ctx context.Context, input *example.ExampleInput, options nexus.StartOperationOptions) (*example.ExampleOutput, error) {
 		return &example.ExampleOutput{
@@ -28,7 +28,7 @@ func (t *twoWayHandler) Example(name string) nexus.Operation[*example.ExampleInp
 	})
 }
 
-var _ examplenexus.TwoWayNexusServiceHandler = &twoWayHandler{}
+var _ examplenexus.TwoWayNexusHandler = &twoWayHandler{}
 
 func TestTwoWay(t *testing.T) {
 	svc, err := examplenexus.NewTwoWayNexusService(&twoWayHandler{})
@@ -47,17 +47,17 @@ func TestTwoWay(t *testing.T) {
 }
 
 type oneWayHandler struct {
-	examplenexus.UnimplementedOneWayNexusServiceHandler
+	examplenexus.UnimplementedOneWayNexusHandler
 }
 
-// NoInput implements examplenexus.OneWayNexusServiceHandler.
+// NoInput implements examplenexus.OneWayNexusHandler.
 func (o *oneWayHandler) NoInput(name string) nexus.Operation[nexus.NoValue, *example.ExampleOutput] {
 	return nexus.NewSyncOperation(name, func(ctx context.Context, _ nexus.NoValue, options nexus.StartOperationOptions) (*example.ExampleOutput, error) {
 		return &example.ExampleOutput{Foo: "bar"}, nil
 	})
 }
 
-// NoOutput implements examplenexus.OneWayNexusServiceHandler.
+// NoOutput implements examplenexus.OneWayNexusHandler.
 func (o *oneWayHandler) NoOutput(name string) nexus.Operation[*example.ExampleInput, nexus.NoValue] {
 	return nexus.NewSyncOperation(name, func(ctx context.Context, input *example.ExampleInput, options nexus.StartOperationOptions) (nexus.NoValue, error) {
 		if input.Foo != "bar" {
@@ -67,7 +67,7 @@ func (o *oneWayHandler) NoOutput(name string) nexus.Operation[*example.ExampleIn
 	})
 }
 
-var _ examplenexus.OneWayNexusServiceHandler = &oneWayHandler{}
+var _ examplenexus.OneWayNexusHandler = &oneWayHandler{}
 
 func TestOneWay(t *testing.T) {
 	svc, err := examplenexus.NewOneWayNexusService(&oneWayHandler{})
