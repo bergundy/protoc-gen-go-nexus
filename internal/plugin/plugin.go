@@ -3,15 +3,18 @@ package plugin
 import (
 	"cmp"
 	"fmt"
+	"log"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	nexusv1 "github.com/bergundy/nexus-proto-annotations/go/nexus/v1"
 	"github.com/dave/jennifer/jen"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const nexusPkg = "github.com/nexus-rpc/sdk-go/nexus"
@@ -28,17 +31,19 @@ var multiLineValues = jen.Options{
 
 type Plugin struct {
 	*protogen.Plugin
-	version string
-	commit  string
-	flags   *pflag.FlagSet
+	version              string
+	commit               string
+	flags                *pflag.FlagSet
+	messageNameToMessage map[protoreflect.FullName]*protogen.Message
 }
 
 func New(version, commit string) *Plugin {
 	flags := pflag.NewFlagSet("plugin", pflag.ExitOnError)
 	p := &Plugin{
-		version: version,
-		commit:  commit,
-		flags:   flags,
+		version:              version,
+		commit:               commit,
+		flags:                flags,
+		messageNameToMessage: make(map[protoreflect.FullName]*protogen.Message),
 	}
 
 	return p
@@ -50,6 +55,11 @@ func (p *Plugin) Param(key, value string) error {
 
 func (p *Plugin) Run(plugin *protogen.Plugin) error {
 	p.Plugin = plugin
+	for _, file := range plugin.Files {
+		for _, msg := range file.Messages {
+			p.messageNameToMessage[msg.Desc.FullName()] = msg
+		}
+	}
 	for _, file := range plugin.Files {
 		if !file.Generate {
 			continue
@@ -137,6 +147,27 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 	}
 
 	for _, method := range svc.Methods {
+		startResult := p.startResult(method)
+		if startResult != nil {
+			asyncResultFunc := operationHandlerResultAsyncNewFuncName(svc, method)
+
+			f.Func().Id(asyncResultFunc).Params(
+				jen.Id("operationID").String(),
+				jen.Id("startResult").Add(startResult),
+				jen.Id("links").Op("[]").Qual(nexusPkg, "Link"),
+			).Params(
+				jen.Op("*").Qual(nexusPkg, "HandlerStartOperationResultAsync"),
+			).Block(
+				jen.Return(
+					jen.Op("&").Qual(nexusPkg, "HandlerStartOperationResultAsync").Block(
+						jen.Id("OperationID").Op(":").Id("operationID").Op(","),
+						jen.Id("StartResult").Op(":").Id("startResult").Op(","),
+						jen.Id("Links").Op(":").Id("links").Op(","),
+					),
+				),
+			)
+		}
+
 		input, output := methodIO(method)
 		st := jen.Id(method.GoName).Params(jen.Id("name").String()).Qual(nexusPkg, "Operation").Types(
 			input,
@@ -229,12 +260,26 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		})
 
 	for _, method := range svc.Methods {
-		syncMethodName := method.GoName
-		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
 		input, output := methodIO(method)
 
 		hasInput := method.Input.Desc.FullName() != "google.protobuf.Empty"
 		hasOutput := method.Output.Desc.FullName() != "google.protobuf.Empty"
+		startResult := p.startResult(method)
+		asyncResultType := operationStartResult(svc, method)
+		syncMethodName := method.GoName
+		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
+
+		f.Type().Id(asyncResultType).StructFunc(func(g *jen.Group) {
+			// TODO: document me.
+			if hasOutput {
+				g.Id("Successful").Add(output)
+			}
+			if startResult != nil {
+				g.Id("StartResult").Add(startResult)
+			}
+			g.Id("Pending").Op("*").Qual(nexusPkg, "OperationHandle").Types(jen.Add(output))
+			g.Id("Links").Op("[]").Qual(nexusPkg, "Link")
+		})
 
 		f.Func().
 			ParamsFunc(func(g *jen.Group) {
@@ -249,11 +294,11 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 				g.Id("options").Qual(nexusPkg, "StartOperationOptions")
 			}).
 			Params(
-				jen.Op("*").Qual(nexusPkg, "ClientStartOperationResult").Types(output),
+				jen.Op("*").Id(asyncResultType),
 				jen.Error(),
 			).
 			BlockFunc(func(g *jen.Group) {
-				g.Return().Qual(nexusPkg, "StartOperation").CallFunc(func(g *jen.Group) {
+				g.Id("res").Op(",").Err().Op(":=").Qual(nexusPkg, "StartOperation").CallFunc(func(g *jen.Group) {
 					g.Id("ctx")
 					g.Op("&").Id("c").Dot("client")
 					g.Id(operationVar(svc, method))
@@ -264,6 +309,19 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 					}
 					g.Id("options")
 				})
+				g.If().Err().Op("!=").Nil().Block(jen.Return(jen.Nil(), jen.Err()))
+
+				g.Id("typed").Op(":=").Id(asyncResultType).BlockFunc(func(g *jen.Group) {
+					if hasOutput {
+						g.Id("Successful").Op(":").Id("res").Dot("Successful").Op(",")
+					}
+					g.Id("Pending").Op(":").Id("res").Dot("Pending").Op(",")
+					g.Id("Links").Op(":").Id("res").Dot("Links").Op(",")
+				})
+				if startResult != nil {
+					g.If().Err().Op(":=").Id("res").Dot("StartResult").Dot("Consume").Call(jen.Op("&").Id("typed").Dot("StartResult")).Op(";").Err().Op("!=").Nil().Block(jen.Return(jen.Nil(), jen.Err()))
+				}
+				g.Return(jen.Op("&").Id("typed"), jen.Nil())
 			})
 
 		f.Func().
@@ -308,6 +366,19 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 	}
 }
 
+func (p *Plugin) startResult(method *protogen.Method) *jen.Statement {
+	startResult := operationOptions(method).GetStartResult()
+	if startResult == "" {
+		return nil
+	}
+	ref := fullyQualifiedRef(method.Desc.FullName().Parent(), startResult)
+	msg := p.messageNameToMessage[ref]
+	if msg == nil {
+		log.Fatalf("Could not map ref %q to message", ref)
+	}
+	return jen.Op("*").Qual(string(msg.GoIdent.GoImportPath), msg.GoIdent.GoName)
+}
+
 func methodIO(method *protogen.Method) (*jen.Statement, *jen.Statement) {
 	var input *jen.Statement
 	if method.Input.Desc.FullName() != "google.protobuf.Empty" {
@@ -333,6 +404,14 @@ func operationVar(svc *protogen.Service, method *protogen.Method) string {
 	return fmt.Sprintf("%s%sOperation", svc.GoName, method.GoName)
 }
 
+func operationStartResult(svc *protogen.Service, method *protogen.Method) string {
+	return fmt.Sprintf("%s%sOperationStartResult", svc.GoName, method.GoName)
+}
+
+func operationHandlerResultAsyncNewFuncName(svc *protogen.Service, method *protogen.Method) string {
+	return fmt.Sprintf("New%s%sOperationHandlerResultAsync", svc.GoName, method.GoName)
+}
+
 // operationOptions returns the OperationOptions for the given proto Method
 func operationOptions(m *protogen.Method) *nexusv1.OperationOptions {
 	opts, _ := proto.GetExtension(m.Desc.Options(), nexusv1.E_Operation).(*nexusv1.OperationOptions)
@@ -343,4 +422,11 @@ func operationOptions(m *protogen.Method) *nexusv1.OperationOptions {
 func serviceOptions(svc *protogen.Service) *nexusv1.ServiceOptions {
 	opts, _ := proto.GetExtension(svc.Desc.Options(), nexusv1.E_Service).(*nexusv1.ServiceOptions)
 	return opts
+}
+
+func fullyQualifiedRef(parent protoreflect.FullName, ref string) protoreflect.FullName {
+	if strings.Contains(ref, ".") {
+		log.Fatalf("Cannot get fully qualified ref name from %q, only refs in current package are supported", ref)
+	}
+	return parent.Parent().Append(protoreflect.Name(ref))
 }

@@ -3,10 +3,10 @@ module github.com/bergundy/protoc-gen-go-nexus
 go 1.23.4
 
 require (
-	github.com/bergundy/nexus-proto-annotations v0.0.0-20241226162859-a33444822131
+	github.com/bergundy/nexus-proto-annotations v0.0.0-20241227212513-d4f7fd966fb7
 	github.com/dave/jennifer v1.7.1
-	github.com/nexus-rpc/sdk-go v0.1.1-0.20241224201932-ba51c14d4587
-	github.com/nexus-rpc/sdk-go/contrib/nexusproto v0.0.0-20241224201932-ba51c14d4587
+	github.com/nexus-rpc/sdk-go v0.1.1-0.20241227212239-c9ac3500f5b0
+	github.com/nexus-rpc/sdk-go/contrib/nexusproto v0.0.0-20241227212239-c9ac3500f5b0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/protobuf v1.36.1

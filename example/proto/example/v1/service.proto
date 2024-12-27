@@ -30,3 +30,21 @@ service TwoWay {
     option (nexus.v1.operation).name = "example";
   }
 }
+
+message ExecuteRequest {
+  string id = 1; 
+}
+
+message ExecuteStartResult {
+  string run_id = 1; 
+}
+
+message ExecuteResponse {
+  bool ok = 1; 
+}
+
+service MultiStage {
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse) {
+    option (nexus.v1.operation).start_result = "ExecuteStartResult";
+  }
+}
