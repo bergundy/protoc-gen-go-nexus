@@ -268,6 +268,7 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		asyncResultType := operationStartResult(svc, method)
 		syncMethodName := method.GoName
 		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
+		handleMethodName := fmt.Sprintf("New%sHandle", method.GoName)
 
 		f.Type().Id(asyncResultType).StructFunc(func(g *jen.Group) {
 			// TODO: document me.
@@ -362,6 +363,24 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 					g.Id("_").Op(",").Id("err").Op(":=").Add(call)
 					g.Return().Id("err")
 				}
+			})
+
+		f.Func().
+			ParamsFunc(func(g *jen.Group) {
+				g.Id("c").Op("*").Id(structName)
+			}).
+			Id(handleMethodName).
+			Params(jen.Id("id").String()).
+			Params(
+				jen.Op("*").Qual(nexusPkg, "OperationHandle").Types(output),
+				jen.Error(),
+			).
+			BlockFunc(func(g *jen.Group) {
+				g.Return().Qual(nexusPkg, "NewHandle").CallFunc(func(g *jen.Group) {
+					g.Op("&").Id("c").Dot("client")
+					g.Id(operationVar(svc, method))
+					g.Id("id")
+				})
 			})
 	}
 }

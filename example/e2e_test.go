@@ -138,6 +138,12 @@ func TestMultiStage(t *testing.T) {
 	outcome, err := res.Pending.GetResult(ctx, nexus.GetOperationResultOptions{})
 	require.NoError(t, err)
 	require.True(t, outcome.Ok)
+	// Also test getting a handle.
+	handle, err := c.NewExecuteHandle(res.Pending.ID)
+	require.NoError(t, err)
+	outcome, err = handle.GetResult(ctx, nexus.GetOperationResultOptions{})
+	require.NoError(t, err)
+	require.True(t, outcome.Ok)
 }
 
 func setup(t *testing.T, service *nexus.Service) (ctx context.Context, baseURL string) {
