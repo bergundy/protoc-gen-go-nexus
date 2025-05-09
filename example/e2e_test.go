@@ -101,8 +101,10 @@ func setup(t *testing.T, service *nexus.Service) (ctx context.Context, baseURL s
 	require.NoError(t, err)
 
 	httpHandler := nexus.NewHTTPHandler(nexus.HandlerOptions{
-		Handler:    handler,
-		Serializer: nexusproto.Serializer(nexusproto.SerializerModePreferJSON),
+		Handler: handler,
+		Serializer: nexusproto.NewSerializer(nexusproto.SerializerOptions{
+			Mode: nexusproto.SerializerModePreferJSON,
+		}),
 	})
 
 	listener, err := net.Listen("tcp", "localhost:0")

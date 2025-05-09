@@ -301,9 +301,11 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		BlockFunc(func(g *jen.Group) {
 			g.Id("options").Dot("Service").Op("=").Id(fmt.Sprintf("%sServiceName", svc.GoName))
 			g.If().Id("options").Dot("Serializer").Op("==").Nil().Block(
-				jen.Id("options").Dot("Serializer").Op("=").Qual(nexusProtoPkg, "Serializer").Call(
+				jen.Id("options").Dot("Serializer").Op("=").Qual(nexusProtoPkg, "NewSerializer").Call(
 					// TODO: this can be made configurable.
-					jen.Qual(nexusProtoPkg, "SerializerModePreferJSON"),
+					jen.Qual(nexusProtoPkg, "SerializerOptions").CustomFunc(multiLineValues, func(g *jen.Group) {
+						g.Id("Mode").Op(":").Qual(nexusProtoPkg, "SerializerModePreferJSON")
+					}),
 				),
 			)
 			g.Id("client").Op(",").Id("err").Op(":=").Qual(nexusPkg, "NewHTTPClient").Call(
