@@ -49,7 +49,7 @@ service Greeting {
 ### Customize code generation
 
 Follow the instructions in [nexus-proto-annotations](https://github.com/bergundy/nexus-proto-annotations) for modifying
-the service and operation names.
+the service and operation names and tagging for includes and excludes.
 
 ### Create `buf` config files
 
@@ -94,6 +94,11 @@ plugins:
     strategy: all
     opt:
       - paths=source_relative
+      # Optionally include or exclude operations and services
+      # - include-service-tags=my-include-tag
+      # - exclude-service-tags=my-exclude-tag
+      # - include-operation-tags=my-include-tag
+      # - exclude-operation-tags=my-exclude-tag
 ```
 
 ### Generate code 
@@ -230,6 +235,7 @@ PATH=${PWD}:${PATH} buf generate
 
 ```
 go test ./...
+grep -qv Exclude example/gen/example/v1/examplenexus/service_nexus.pb.go
 ```
 
 ### Lint code

@@ -91,61 +91,6 @@ func TestOneWay(t *testing.T) {
 	require.Equal(t, "bar", noInResult.Successful.Foo)
 }
 
-type multiStageHandler struct {
-	examplenexus.UnimplementedMultiStageNexusHandler
-}
-
-type multiStageExecuteHandler struct {
-	nexus.UnimplementedOperation[*example.ExecuteRequest, *example.ExecuteResponse]
-	name string
-}
-
-func (h *multiStageExecuteHandler) Name() string {
-	return h.name
-}
-
-func (h *multiStageExecuteHandler) Start(ctx context.Context, req *example.ExecuteRequest, _ nexus.StartOperationOptions) (nexus.HandlerStartOperationResult[*example.ExecuteResponse], error) {
-	return examplenexus.NewMultiStageExecuteOperationHandlerResultAsync(req.Id, &example.ExecuteStartResult{
-		RunId: "run-id",
-	}, nil), nil
-}
-
-func (h *multiStageExecuteHandler) GetResult(ctx context.Context, id string, _ nexus.GetOperationResultOptions) (*example.ExecuteResponse, error) {
-	if id != "my-id" {
-		return nil, nexus.HandlerErrorf(nexus.HandlerErrorTypeBadRequest, "expected ID to be 'my-id', got %q", id)
-	}
-	return &example.ExecuteResponse{Ok: true}, nil
-}
-
-// NoOutput implements examplenexus.OneWayNexusHandler.
-func (o *multiStageHandler) Execute(name string) nexus.Operation[*example.ExecuteRequest, *example.ExecuteResponse] {
-	return &multiStageExecuteHandler{name: name}
-}
-
-var _ examplenexus.OneWayNexusHandler = &oneWayHandler{}
-
-func TestMultiStage(t *testing.T) {
-	svc, err := examplenexus.NewMultiStageNexusService(&multiStageHandler{})
-	require.NoError(t, err)
-	ctx, baseURL := setup(t, svc)
-	c, err := examplenexus.NewMultiStageNexusHTTPClient(nexus.HTTPClientOptions{
-		BaseURL: baseURL,
-	})
-	require.NoError(t, err)
-	res, err := c.ExecuteAsync(ctx, &example.ExecuteRequest{Id: "my-id"}, nexus.StartOperationOptions{})
-	require.NoError(t, err)
-	require.Equal(t, "run-id", res.StartResult.RunId)
-	outcome, err := res.Pending.GetResult(ctx, nexus.GetOperationResultOptions{})
-	require.NoError(t, err)
-	require.True(t, outcome.Ok)
-	// Also test getting a handle.
-	handle, err := c.NewExecuteHandle(res.Pending.ID)
-	require.NoError(t, err)
-	outcome, err = handle.GetResult(ctx, nexus.GetOperationResultOptions{})
-	require.NoError(t, err)
-	require.True(t, outcome.Ok)
-}
-
 func setup(t *testing.T, service *nexus.Service) (ctx context.Context, baseURL string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

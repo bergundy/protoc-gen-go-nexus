@@ -3,7 +3,7 @@ module github.com/bergundy/protoc-gen-go-nexus
 go 1.23.4
 
 require (
-	github.com/bergundy/nexus-proto-annotations v0.0.0-20241227212513-d4f7fd966fb7
+	github.com/bergundy/nexus-proto-annotations v0.0.0-20250509203513-e812ed89097d
 	github.com/dave/jennifer v1.7.1
 	github.com/nexus-rpc/sdk-go v0.1.1-0.20241227212239-c9ac3500f5b0
 	github.com/nexus-rpc/sdk-go/contrib/nexusproto v0.0.0-20241227212239-c9ac3500f5b0

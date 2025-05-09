@@ -16,6 +16,8 @@ message ExampleOutput {
 }
 
 service OneWay {
+  option (nexus.v1.service).tags = "gen";
+
   rpc NoInput(google.protobuf.Empty) returns (ExampleOutput);
 
   rpc NoOutput(ExampleInput) returns (google.protobuf.Empty);
@@ -24,6 +26,7 @@ service OneWay {
 service TwoWay {
   // Also test options.
   option (nexus.v1.service).name = "example.v1.two-way";
+  option (nexus.v1.service).tags = "gen";
 
   rpc Example(ExampleInput) returns (ExampleOutput) {
     // Also test options.
@@ -31,20 +34,28 @@ service TwoWay {
   }
 }
 
-message ExecuteRequest {
-  string id = 1; 
+service ExcludeMe {
+  // both gen and no-gen tagged, no-gen wins.
+  option (nexus.v1.service).tags = "gen";
+  option (nexus.v1.service).tags = "no-gen";
+
+  rpc Example(ExampleInput) returns (ExampleOutput) {
+  }
+
+  rpc ExcludeMe(ExampleInput) returns (ExampleOutput) {
+    option (nexus.v1.operation).tags = "no-gen";
+  }
 }
 
-message ExecuteStartResult {
-  string run_id = 1; 
+service ExcludeMeBecauseIAmUntagged {
+  rpc Example(ExampleInput) returns (ExampleOutput) {
+  }
 }
 
-message ExecuteResponse {
-  bool ok = 1; 
-}
+service ExcludeMeBecauseMyOperationsAreExcluded {
+  option (nexus.v1.service).tags = "gen";
 
-service MultiStage {
-  rpc Execute(ExecuteRequest) returns (ExecuteResponse) {
-    option (nexus.v1.operation).start_result = "ExecuteStartResult";
+  rpc Example(ExampleInput) returns (ExampleOutput) {
+    option (nexus.v1.operation).tags = "no-gen";
   }
 }

@@ -12,3 +12,6 @@ plugins:
     strategy: all
     opt:
       - paths=source_relative
+      - include-service-tags=gen
+      - exclude-service-tags=no-gen
+      - exclude-operation-tags=no-gen

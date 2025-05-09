@@ -3,10 +3,11 @@ package plugin
 import (
 	"cmp"
 	"fmt"
-	"log"
+	"maps"
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	nexusv1 "github.com/bergundy/nexus-proto-annotations/go/nexus/v1"
@@ -33,6 +34,10 @@ type Plugin struct {
 	*protogen.Plugin
 	version              string
 	commit               string
+	includeServiceTags   map[string]struct{}
+	excludeServiceTags   map[string]struct{}
+	includeOperationTags map[string]struct{}
+	excludeOperationTags map[string]struct{}
 	flags                *pflag.FlagSet
 	messageNameToMessage map[protoreflect.FullName]*protogen.Message
 }
@@ -45,6 +50,10 @@ func New(version, commit string) *Plugin {
 		flags:                flags,
 		messageNameToMessage: make(map[protoreflect.FullName]*protogen.Message),
 	}
+	flags.StringArray("include-service-tags", []string{}, "include only services with these tags")
+	flags.StringArray("exclude-service-tags", []string{}, "exclude any services with these tags")
+	flags.StringArray("include-operation-tags", []string{}, "include only operations with these tags")
+	flags.StringArray("exclude-operation-tags", []string{}, "exclude any operations with these tags")
 
 	return p
 }
@@ -53,7 +62,39 @@ func (p *Plugin) Param(key, value string) error {
 	return p.flags.Set(key, value)
 }
 
+func (p *Plugin) getTags(name string) (map[string]struct{}, error) {
+	tags, err := p.flags.GetStringArray(name)
+	if err != nil {
+		return nil, fmt.Errorf("could not get include-tags flag: %w", err)
+	}
+	tagsMap := make(map[string]struct{}, len(tags))
+	for _, t := range tags {
+		tagsMap[t] = struct{}{}
+	}
+	return tagsMap, nil
+}
+
+func (p *Plugin) init() error {
+	var err error
+	if p.includeServiceTags, err = p.getTags("include-service-tags"); err != nil {
+		return err
+	}
+	if p.excludeServiceTags, err = p.getTags("exclude-service-tags"); err != nil {
+		return err
+	}
+	if p.includeOperationTags, err = p.getTags("include-operation-tags"); err != nil {
+		return err
+	}
+	if p.excludeOperationTags, err = p.getTags("exclude-operation-tags"); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (p *Plugin) Run(plugin *protogen.Plugin) error {
+	if err := p.init(); err != nil {
+		return err
+	}
 	p.Plugin = plugin
 	for _, file := range plugin.Files {
 		for _, msg := range file.Messages {
@@ -82,6 +123,16 @@ func (p *Plugin) Run(plugin *protogen.Plugin) error {
 
 		var hasContent bool
 		for _, svc := range file.Services {
+			// Entire service excluded.
+			if !p.shouldIncludeService(svc) {
+				continue
+			}
+			// All methods excluded.
+			if !slices.ContainsFunc(svc.Methods, func(m *protogen.Method) bool {
+				return p.shouldIncludeOperation(m)
+			}) {
+				continue
+			}
 			hasContent = true
 			p.genConsts(f, svc)
 			p.genHandler(f, svc)
@@ -110,6 +161,18 @@ func (p *Plugin) genCodeGenerationHeader(f *jen.File, target *protogen.File) {
 	f.PackageComment("versions: ")
 	f.PackageComment(fmt.Sprintf("    protoc-gen-go-nexus %s (%s)", p.version, p.commit))
 	f.PackageComment(fmt.Sprintf("    go %s", runtime.Version()))
+	if len(p.includeServiceTags) > 0 {
+		f.PackageComment(fmt.Sprintf("include service tags: %s", strings.Join(slices.Collect(maps.Keys(p.includeServiceTags)), ", ")))
+	}
+	if len(p.excludeServiceTags) > 0 {
+		f.PackageComment(fmt.Sprintf("exclude service tags: %s", strings.Join(slices.Collect(maps.Keys(p.excludeServiceTags)), ", ")))
+	}
+	if len(p.includeOperationTags) > 0 {
+		f.PackageComment(fmt.Sprintf("include operation tags: %s", strings.Join(slices.Collect(maps.Keys(p.includeOperationTags)), ", ")))
+	}
+	if len(p.excludeOperationTags) > 0 {
+		f.PackageComment(fmt.Sprintf("exclude operation tags: %s", strings.Join(slices.Collect(maps.Keys(p.excludeOperationTags)), ", ")))
+	}
 	compilerVersion := p.Plugin.Request.CompilerVersion
 	if compilerVersion != nil {
 		f.PackageComment(fmt.Sprintf("    protoc %s", compilerVersion.String()))
@@ -127,6 +190,9 @@ func (p *Plugin) genConsts(f *jen.File, svc *protogen.Service) {
 	f.Const().Id(svcNameConst).Op("=").Lit(svcNameVal)
 
 	for _, method := range svc.Methods {
+		if !p.shouldIncludeOperation(method) {
+			continue
+		}
 		operationNameVal := cmp.Or(operationOptions(method).GetName(), method.GoName)
 		nameConst := operationNameConst(svc, method)
 
@@ -142,32 +208,12 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 	ifaceName := fmt.Sprintf("%sNexusHandler", svc.GoName)
 	unimplementedHandlerName := fmt.Sprintf("Unimplemented%s", ifaceName)
 
-	statements := []jen.Code{
-		jen.Id(fmt.Sprintf("mustEmbed%s", unimplementedHandlerName)).Call(),
-	}
+	statements := []jen.Code{}
 
 	for _, method := range svc.Methods {
-		startResult := p.startResult(method)
-		if startResult != nil {
-			asyncResultFunc := operationHandlerResultAsyncNewFuncName(svc, method)
-
-			f.Func().Id(asyncResultFunc).Params(
-				jen.Id("operationID").String(),
-				jen.Id("startResult").Add(startResult),
-				jen.Id("links").Op("[]").Qual(nexusPkg, "Link"),
-			).Params(
-				jen.Op("*").Qual(nexusPkg, "HandlerStartOperationResultAsync"),
-			).Block(
-				jen.Return(
-					jen.Op("&").Qual(nexusPkg, "HandlerStartOperationResultAsync").Block(
-						jen.Id("OperationID").Op(":").Id("operationID").Op(","),
-						jen.Id("StartResult").Op(":").Id("startResult").Op(","),
-						jen.Id("Links").Op(":").Id("links").Op(","),
-					),
-				),
-			)
+		if !p.shouldIncludeOperation(method) {
+			continue
 		}
-
 		input, output := methodIO(method)
 		st := jen.Id(method.GoName).Params(jen.Id("name").String()).Qual(nexusPkg, "Operation").Types(
 			input,
@@ -193,16 +239,29 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 
 	f.Type().Id(unimplementedHandlerName).Struct()
 
-	f.Func().
-		ParamsFunc(func(g *jen.Group) {
-			g.Id("h").Op("*").Id(unimplementedHandlerName)
-		}).
-		Id(fmt.Sprintf("mustEmbed%s", unimplementedHandlerName)).
-		Params().
-		Block()
-
 	for _, method := range svc.Methods {
+		if !p.shouldIncludeOperation(method) {
+			continue
+		}
 		input, output := methodIO(method)
+
+		unimplementedOpHandlerName := fmt.Sprintf("unimplemented%s%s", svc.GoName, method.GoName)
+
+		f.Type().Id(unimplementedOpHandlerName).Struct(
+			jen.Qual(nexusPkg, "UnimplementedOperation").Types(input, output),
+			jen.Id("name").String(),
+		)
+
+		f.Func().
+			ParamsFunc(func(g *jen.Group) {
+				g.Id("h").Op("*").Id(unimplementedOpHandlerName)
+			}).
+			Id("Name").
+			Params().
+			String().
+			Block(
+				jen.Return(jen.Id("h").Dot("name")),
+			)
 
 		f.Func().
 			ParamsFunc(func(g *jen.Group) {
@@ -212,9 +271,9 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 			Params(jen.Id("name").String()).
 			Qual(nexusPkg, "Operation").Types(input, output).
 			Block(
-				jen.Panic(jen.Lit("TODO")),
-				// TODO: this doesn't have a Name() and can't be used as an Operation.
-				// jen.Return().Op("&").Qual(nexusPkg, "UnimplementedOperation").Types(input, output).Block(),
+				jen.Return().Op("&").Id(unimplementedOpHandlerName).CustomFunc(multiLineValues, func(g *jen.Group) {
+					g.Id("name").Op(":").Id("name")
+				}),
 			)
 	}
 }
@@ -260,11 +319,13 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 		})
 
 	for _, method := range svc.Methods {
+		if !p.shouldIncludeOperation(method) {
+			continue
+		}
 		input, output := methodIO(method)
 
 		hasInput := method.Input.Desc.FullName() != "google.protobuf.Empty"
 		hasOutput := method.Output.Desc.FullName() != "google.protobuf.Empty"
-		startResult := p.startResult(method)
 		asyncResultType := operationStartResult(svc, method)
 		syncMethodName := method.GoName
 		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
@@ -274,9 +335,6 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 			// TODO: document me.
 			if hasOutput {
 				g.Id("Successful").Add(output)
-			}
-			if startResult != nil {
-				g.Id("StartResult").Add(startResult)
 			}
 			g.Id("Pending").Op("*").Qual(nexusPkg, "OperationHandle").Types(jen.Add(output))
 			g.Id("Links").Op("[]").Qual(nexusPkg, "Link")
@@ -319,9 +377,6 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 					g.Id("Pending").Op(":").Id("res").Dot("Pending").Op(",")
 					g.Id("Links").Op(":").Id("res").Dot("Links").Op(",")
 				})
-				if startResult != nil {
-					g.If().Err().Op(":=").Id("res").Dot("StartResult").Dot("Consume").Call(jen.Op("&").Id("typed").Dot("StartResult")).Op(";").Err().Op("!=").Nil().Block(jen.Return(jen.Nil(), jen.Err()))
-				}
 				g.Return(jen.Op("&").Id("typed"), jen.Nil())
 			})
 
@@ -385,17 +440,32 @@ func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
 	}
 }
 
-func (p *Plugin) startResult(method *protogen.Method) *jen.Statement {
-	startResult := operationOptions(method).GetStartResult()
-	if startResult == "" {
-		return nil
+func (p *Plugin) shouldIncludeService(svc *protogen.Service) bool {
+	tags := serviceOptions(svc).GetTags()
+	if len(p.includeServiceTags) > 0 && !slices.ContainsFunc(tags, func(t string) bool {
+		_, ok := p.includeServiceTags[t]
+		return ok
+	}) {
+		return false
 	}
-	ref := fullyQualifiedRef(method.Desc.FullName().Parent(), startResult)
-	msg := p.messageNameToMessage[ref]
-	if msg == nil {
-		log.Fatalf("Could not map ref %q to message", ref)
+	return !slices.ContainsFunc(tags, func(t string) bool {
+		_, ok := p.excludeServiceTags[t]
+		return ok
+	})
+}
+
+func (p *Plugin) shouldIncludeOperation(m *protogen.Method) bool {
+	tags := operationOptions(m).GetTags()
+	if len(p.includeOperationTags) > 0 && !slices.ContainsFunc(tags, func(t string) bool {
+		_, ok := p.includeOperationTags[t]
+		return ok
+	}) {
+		return false
 	}
-	return jen.Op("*").Qual(string(msg.GoIdent.GoImportPath), msg.GoIdent.GoName)
+	return !slices.ContainsFunc(tags, func(t string) bool {
+		_, ok := p.excludeOperationTags[t]
+		return ok
+	})
 }
 
 func methodIO(method *protogen.Method) (*jen.Statement, *jen.Statement) {
@@ -427,10 +497,6 @@ func operationStartResult(svc *protogen.Service, method *protogen.Method) string
 	return fmt.Sprintf("%s%sOperationStartResult", svc.GoName, method.GoName)
 }
 
-func operationHandlerResultAsyncNewFuncName(svc *protogen.Service, method *protogen.Method) string {
-	return fmt.Sprintf("New%s%sOperationHandlerResultAsync", svc.GoName, method.GoName)
-}
-
 // operationOptions returns the OperationOptions for the given proto Method
 func operationOptions(m *protogen.Method) *nexusv1.OperationOptions {
 	opts, _ := proto.GetExtension(m.Desc.Options(), nexusv1.E_Operation).(*nexusv1.OperationOptions)
@@ -441,11 +507,4 @@ func operationOptions(m *protogen.Method) *nexusv1.OperationOptions {
 func serviceOptions(svc *protogen.Service) *nexusv1.ServiceOptions {
 	opts, _ := proto.GetExtension(svc.Desc.Options(), nexusv1.E_Service).(*nexusv1.ServiceOptions)
 	return opts
-}
-
-func fullyQualifiedRef(parent protoreflect.FullName, ref string) protoreflect.FullName {
-	if strings.Contains(ref, ".") {
-		log.Fatalf("Cannot get fully qualified ref name from %q, only refs in current package are supported", ref)
-	}
-	return parent.Parent().Append(protoreflect.Name(ref))
 }
