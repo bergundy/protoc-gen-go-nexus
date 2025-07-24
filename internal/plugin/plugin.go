@@ -230,6 +230,9 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 			g.Id("svc").Op(":=").Qual(nexusPkg, "NewService").Call(jen.Id(fmt.Sprintf("%sServiceName", svc.GoName)))
 			g.Id("err").Op(":=").Id("svc").Dot("Register").CallFunc(func(g *jen.Group) {
 				for _, method := range svc.Methods {
+					if !p.shouldIncludeOperation(method) {
+						continue
+					}
 					g.Id("h").Dot(method.GoName).Call(jen.Id(operationNameConst(svc, method)))
 				}
 			})

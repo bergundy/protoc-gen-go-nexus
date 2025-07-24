@@ -11,6 +11,7 @@ jobs:
   # Uploads the native library for each target as a build artifact.
   build-lint-test:
     strategy:
+      fail-fast: false
       matrix:
         runs-on:
           - ubuntu-latest
@@ -38,6 +39,8 @@ jobs:
           push: false
           # Don't check for breaking, this isn't a library, just an example.
           breaking: false
+          # Don't format on windows due to newline differences.
+          format: ${{ matrix.runs-on == 'ubuntu-latest' }}
 
       - name: Install protoc
         uses: arduino/setup-protoc@v3
