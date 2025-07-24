@@ -91,6 +91,20 @@ func TestOneWay(t *testing.T) {
 	require.Equal(t, "bar", noInResult.Successful.Foo)
 }
 
+type includeMeWithExcludedMethodsHandler struct {
+	examplenexus.UnimplementedIncludeWithExcludedMethodsNexusHandler
+}
+
+func (h *includeMeWithExcludedMethodsHandler) Example(name string) nexus.Operation[*example.ExampleInput, *example.ExampleOutput] {
+	return nexus.NewSyncOperation(name, func(ctx context.Context, input *example.ExampleInput, options nexus.StartOperationOptions) (*example.ExampleOutput, error) {
+		return &example.ExampleOutput{
+			Foo: input.Foo,
+		}, nil
+	})
+}
+
+var _ examplenexus.IncludeWithExcludedMethodsNexusHandler = &includeMeWithExcludedMethodsHandler{}
+
 func setup(t *testing.T, service *nexus.Service) (ctx context.Context, baseURL string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

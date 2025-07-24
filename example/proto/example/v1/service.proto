@@ -1,4 +1,4 @@
-syntax="proto3";
+syntax = "proto3";
 
 package example.v1;
 
@@ -39,8 +39,7 @@ service ExcludeMe {
   option (nexus.v1.service).tags = "gen";
   option (nexus.v1.service).tags = "no-gen";
 
-  rpc Example(ExampleInput) returns (ExampleOutput) {
-  }
+  rpc Example(ExampleInput) returns (ExampleOutput) {}
 
   rpc ExcludeMe(ExampleInput) returns (ExampleOutput) {
     option (nexus.v1.operation).tags = "no-gen";
@@ -48,8 +47,7 @@ service ExcludeMe {
 }
 
 service ExcludeMeBecauseIAmUntagged {
-  rpc Example(ExampleInput) returns (ExampleOutput) {
-  }
+  rpc Example(ExampleInput) returns (ExampleOutput) {}
 }
 
 service ExcludeMeBecauseMyOperationsAreExcluded {
@@ -58,4 +56,14 @@ service ExcludeMeBecauseMyOperationsAreExcluded {
   rpc Example(ExampleInput) returns (ExampleOutput) {
     option (nexus.v1.operation).tags = "no-gen";
   }
+}
+
+service IncludeWithExcludedMethods {
+  option (nexus.v1.service).tags = "gen";
+
+  rpc Example(ExampleInput) returns (ExampleOutput) {
+    option (nexus.v1.operation).tags = "no-gen";
+  }
+
+  rpc IncludeMe(ExampleInput) returns (ExampleOutput);
 }
