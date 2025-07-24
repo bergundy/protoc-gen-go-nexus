@@ -11,6 +11,7 @@ jobs:
   # Uploads the native library for each target as a build artifact.
   build-lint-test:
     strategy:
+      fail-fast: false
       matrix:
         runs-on:
           - ubuntu-latest
