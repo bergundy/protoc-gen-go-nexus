@@ -16,6 +16,8 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/pluginpb"
 )
 
 const nexusPkg = "github.com/nexus-rpc/sdk-go/nexus"
@@ -50,6 +52,7 @@ func New(version, commit string) *Plugin {
 		flags:                flags,
 		messageNameToMessage: make(map[protoreflect.FullName]*protogen.Message),
 	}
+
 	flags.StringArray("include-service-tags", []string{}, "include only services with these tags")
 	flags.StringArray("exclude-service-tags", []string{}, "exclude any services with these tags")
 	flags.StringArray("include-operation-tags", []string{}, "include only operations with these tags")
@@ -95,6 +98,9 @@ func (p *Plugin) Run(plugin *protogen.Plugin) error {
 	if err := p.init(); err != nil {
 		return err
 	}
+	plugin.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS | pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+	plugin.SupportedEditionsMinimum = descriptorpb.Edition_EDITION_PROTO3
+	plugin.SupportedEditionsMaximum = descriptorpb.Edition_EDITION_2023
 	p.Plugin = plugin
 	for _, file := range plugin.Files {
 		for _, msg := range file.Messages {
