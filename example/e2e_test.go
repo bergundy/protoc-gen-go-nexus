@@ -2,15 +2,10 @@ package example
 
 import (
 	"context"
-	"fmt"
-	"net"
-	"net/http"
 	"testing"
-	"time"
 
 	"github.com/bergundy/protoc-gen-go-nexus/example/gen/example/v1"
 	examplenexus "github.com/bergundy/protoc-gen-go-nexus/example/gen/example/v1/examplenexus"
-	"github.com/nexus-rpc/sdk-go/contrib/nexusproto"
 	"github.com/nexus-rpc/sdk-go/nexus"
 	"github.com/stretchr/testify/require"
 )
@@ -31,19 +26,8 @@ func (t *twoWayHandler) Example(name string) nexus.Operation[*example.ExampleInp
 var _ examplenexus.TwoWayNexusHandler = &twoWayHandler{}
 
 func TestTwoWay(t *testing.T) {
-	svc, err := examplenexus.NewTwoWayNexusService(&twoWayHandler{})
+	_, err := examplenexus.NewTwoWayNexusService(&twoWayHandler{})
 	require.NoError(t, err)
-	ctx, baseURL := setup(t, svc)
-	c, err := examplenexus.NewTwoWayNexusHTTPClient(nexus.HTTPClientOptions{
-		BaseURL: baseURL,
-	})
-	require.NoError(t, err)
-	output, err := c.Example(ctx, &example.ExampleInput{Foo: "bar"}, nexus.ExecuteOperationOptions{})
-	require.NoError(t, err)
-	require.Equal(t, "bar", output.Foo)
-	result, err := c.ExampleAsync(ctx, &example.ExampleInput{Foo: "bar"}, nexus.StartOperationOptions{})
-	require.NoError(t, err)
-	require.Equal(t, "bar", result.Successful.Foo)
 }
 
 type oneWayHandler struct {
@@ -70,25 +54,8 @@ func (o *oneWayHandler) NoOutput(name string) nexus.Operation[*example.ExampleIn
 var _ examplenexus.OneWayNexusHandler = &oneWayHandler{}
 
 func TestOneWay(t *testing.T) {
-	svc, err := examplenexus.NewOneWayNexusService(&oneWayHandler{})
+	_, err := examplenexus.NewOneWayNexusService(&oneWayHandler{})
 	require.NoError(t, err)
-	ctx, baseURL := setup(t, svc)
-	c, err := examplenexus.NewOneWayNexusHTTPClient(nexus.HTTPClientOptions{
-		BaseURL: baseURL,
-	})
-	require.NoError(t, err)
-	err = c.NoOutput(ctx, &example.ExampleInput{Foo: "bar"}, nexus.ExecuteOperationOptions{})
-	require.NoError(t, err)
-	noOutResult, err := c.NoOutputAsync(ctx, &example.ExampleInput{Foo: "bar"}, nexus.StartOperationOptions{})
-	require.NoError(t, err)
-	require.Nil(t, noOutResult.Pending)
-
-	output, err := c.NoInput(ctx, nexus.ExecuteOperationOptions{})
-	require.NoError(t, err)
-	require.Equal(t, "bar", output.Foo)
-	noInResult, err := c.NoInputAsync(ctx, nexus.StartOperationOptions{})
-	require.NoError(t, err)
-	require.Equal(t, "bar", noInResult.Successful.Foo)
 }
 
 type includeMeWithExcludedMethodsHandler struct {
@@ -104,31 +71,3 @@ func (h *includeMeWithExcludedMethodsHandler) Example(name string) nexus.Operati
 }
 
 var _ examplenexus.IncludeWithExcludedMethodsNexusHandler = &includeMeWithExcludedMethodsHandler{}
-
-func setup(t *testing.T, service *nexus.Service) (ctx context.Context, baseURL string) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	t.Cleanup(cancel)
-	reg := nexus.NewServiceRegistry()
-	require.NoError(t, reg.Register(service))
-	handler, err := reg.NewHandler()
-	require.NoError(t, err)
-
-	httpHandler := nexus.NewHTTPHandler(nexus.HandlerOptions{
-		Handler: handler,
-		Serializer: nexusproto.NewSerializer(nexusproto.SerializerOptions{
-			Mode: nexusproto.SerializerModePreferJSON,
-		}),
-	})
-
-	listener, err := net.Listen("tcp", "localhost:0")
-	require.NoError(t, err)
-	t.Cleanup(func() { listener.Close() })
-
-	go func() {
-		// Ignore for test purposes
-		_ = http.Serve(listener, httpHandler)
-	}()
-
-	return ctx, fmt.Sprintf("http://%s/", listener.Addr().String())
-}

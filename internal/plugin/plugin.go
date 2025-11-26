@@ -21,7 +21,6 @@ import (
 )
 
 const nexusPkg = "github.com/nexus-rpc/sdk-go/nexus"
-const nexusProtoPkg = "github.com/nexus-rpc/sdk-go/contrib/nexusproto"
 const generatedFilenameExtension = "_nexus.pb.go"
 const generatedPackageSuffix = "nexus"
 
@@ -142,7 +141,6 @@ func (p *Plugin) Run(plugin *protogen.Plugin) error {
 			hasContent = true
 			p.genConsts(f, svc)
 			p.genHandler(f, svc)
-			p.genClient(f, svc)
 		}
 
 		if !hasContent {
@@ -284,170 +282,6 @@ func (p *Plugin) genHandler(f *jen.File, svc *protogen.Service) {
 					g.Id("name").Op(":").Id("name")
 				}),
 			)
-	}
-}
-
-func (p *Plugin) genClient(f *jen.File, svc *protogen.Service) {
-	structName := fmt.Sprintf("%sNexusHTTPClient", svc.GoName)
-	f.Type().
-		Id(structName).
-		StructFunc(func(g *jen.Group) {
-			g.Id("client").Qual(nexusPkg, "HTTPClient")
-		})
-
-	ctorName := fmt.Sprintf("New%sNexusHTTPClient", svc.GoName)
-	f.Commentf("%s initializes a new %s.", ctorName, structName)
-	f.Comment("options.Service is overridden with the defined proto service name.")
-	f.Func().
-		Id(ctorName).
-		ParamsFunc(func(g *jen.Group) {
-			g.Id("options").Qual(nexusPkg, "HTTPClientOptions")
-		}).
-		Params(
-			jen.Op("*").Id(structName),
-			jen.Error(),
-		).
-		BlockFunc(func(g *jen.Group) {
-			g.Id("options").Dot("Service").Op("=").Id(fmt.Sprintf("%sServiceName", svc.GoName))
-			g.If().Id("options").Dot("Serializer").Op("==").Nil().Block(
-				jen.Id("options").Dot("Serializer").Op("=").Qual(nexusProtoPkg, "NewSerializer").Call(
-					// TODO: this can be made configurable.
-					jen.Qual(nexusProtoPkg, "SerializerOptions").CustomFunc(multiLineValues, func(g *jen.Group) {
-						g.Id("Mode").Op(":").Qual(nexusProtoPkg, "SerializerModePreferJSON")
-					}),
-				),
-			)
-			g.Id("client").Op(",").Id("err").Op(":=").Qual(nexusPkg, "NewHTTPClient").Call(
-				jen.Id("options"),
-			)
-			g.If(jen.Id("err").Op("!=").Nil()).Block(jen.Return(jen.Nil(), jen.Id("err")))
-			g.Return(
-				jen.Op("&").Id(structName).CustomFunc(multiLineValues, func(g *jen.Group) {
-					g.Id("client").Op(":").Op("*").Id("client")
-				}),
-				jen.Nil(),
-			)
-		})
-
-	for _, method := range svc.Methods {
-		if !p.shouldIncludeOperation(method) {
-			continue
-		}
-		input, output := methodIO(method)
-
-		hasInput := method.Input.Desc.FullName() != "google.protobuf.Empty"
-		hasOutput := method.Output.Desc.FullName() != "google.protobuf.Empty"
-		asyncResultType := operationStartResult(svc, method)
-		syncMethodName := method.GoName
-		asyncMethodName := fmt.Sprintf("%sAsync", method.GoName)
-		handleMethodName := fmt.Sprintf("New%sHandle", method.GoName)
-
-		f.Type().Id(asyncResultType).StructFunc(func(g *jen.Group) {
-			// TODO: document me.
-			if hasOutput {
-				g.Id("Successful").Add(output)
-			}
-			g.Id("Pending").Op("*").Qual(nexusPkg, "OperationHandle").Types(jen.Add(output))
-			g.Id("Links").Op("[]").Qual(nexusPkg, "Link")
-		})
-
-		f.Func().
-			ParamsFunc(func(g *jen.Group) {
-				g.Id("c").Op("*").Id(structName)
-			}).
-			Id(asyncMethodName).
-			ParamsFunc(func(g *jen.Group) {
-				g.Id("ctx").Qual("context", "Context")
-				if hasInput {
-					g.Id("input").Add(input)
-				}
-				g.Id("options").Qual(nexusPkg, "StartOperationOptions")
-			}).
-			Params(
-				jen.Op("*").Id(asyncResultType),
-				jen.Error(),
-			).
-			BlockFunc(func(g *jen.Group) {
-				g.Id("res").Op(",").Err().Op(":=").Qual(nexusPkg, "StartOperation").CallFunc(func(g *jen.Group) {
-					g.Id("ctx")
-					g.Op("&").Id("c").Dot("client")
-					g.Id(operationVar(svc, method))
-					if hasInput {
-						g.Id("input")
-					} else {
-						g.Nil()
-					}
-					g.Id("options")
-				})
-				g.If().Err().Op("!=").Nil().Block(jen.Return(jen.Nil(), jen.Err()))
-
-				g.Id("typed").Op(":=").Id(asyncResultType).BlockFunc(func(g *jen.Group) {
-					if hasOutput {
-						g.Id("Successful").Op(":").Id("res").Dot("Successful").Op(",")
-					}
-					g.Id("Pending").Op(":").Id("res").Dot("Pending").Op(",")
-					g.Id("Links").Op(":").Id("res").Dot("Links").Op(",")
-				})
-				g.Return(jen.Op("&").Id("typed"), jen.Nil())
-			})
-
-		f.Func().
-			ParamsFunc(func(g *jen.Group) {
-				g.Id("c").Op("*").Id(structName)
-			}).
-			Id(syncMethodName).
-			ParamsFunc(func(g *jen.Group) {
-				g.Id("ctx").Qual("context", "Context")
-				if hasInput {
-					g.Id("input").Add(input)
-				}
-				g.Id("options").Qual(nexusPkg, "ExecuteOperationOptions")
-			}).
-			ParamsFunc(func(g *jen.Group) {
-				if hasOutput {
-					g.Add(output)
-				}
-				g.Error()
-			}).
-			BlockFunc(func(g *jen.Group) {
-				call := jen.Qual(nexusPkg, "ExecuteOperation").CallFunc(func(g *jen.Group) {
-					g.Id("ctx")
-					g.Op("&").Id("c").Dot("client")
-					g.Id(operationVar(svc, method))
-					if hasInput {
-						g.Id("input")
-					} else {
-						g.Nil()
-					}
-					g.Id("options")
-				})
-
-				if hasOutput {
-					g.Id("output").Op(",").Id("err").Op(":=").Add(call)
-					g.Return().Id("output").Op(",").Id("err")
-				} else {
-					g.Id("_").Op(",").Id("err").Op(":=").Add(call)
-					g.Return().Id("err")
-				}
-			})
-
-		f.Func().
-			ParamsFunc(func(g *jen.Group) {
-				g.Id("c").Op("*").Id(structName)
-			}).
-			Id(handleMethodName).
-			Params(jen.Id("id").String()).
-			Params(
-				jen.Op("*").Qual(nexusPkg, "OperationHandle").Types(output),
-				jen.Error(),
-			).
-			BlockFunc(func(g *jen.Group) {
-				g.Return().Qual(nexusPkg, "NewHandle").CallFunc(func(g *jen.Group) {
-					g.Op("&").Id("c").Dot("client")
-					g.Id(operationVar(svc, method))
-					g.Id("id")
-				})
-			})
 	}
 }
 
