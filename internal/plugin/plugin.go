@@ -10,8 +10,8 @@ import (
 	"slices"
 	"strings"
 
-	nexusv1 "github.com/nexus-rpc/nexus-proto-annotations/go/nexusannotations/v1"
 	"github.com/dave/jennifer/jen"
+	nexusv1 "github.com/nexus-rpc/nexus-proto-annotations/go/nexusannotations/v1"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -148,7 +148,7 @@ func (p *Plugin) Run(plugin *protogen.Plugin) error {
 		}
 
 		if err := f.Render(
-			p.Plugin.NewGeneratedFile(
+			p.NewGeneratedFile(
 				file.GeneratedFilenamePrefix+generatedFilenameExtension,
 				protogen.GoImportPath(importPath),
 			),
@@ -177,7 +177,7 @@ func (p *Plugin) genCodeGenerationHeader(f *jen.File, target *protogen.File) {
 	if len(p.excludeOperationTags) > 0 {
 		f.PackageComment(fmt.Sprintf("exclude operation tags: %s", strings.Join(slices.Collect(maps.Keys(p.excludeOperationTags)), ", ")))
 	}
-	compilerVersion := p.Plugin.Request.CompilerVersion
+	compilerVersion := p.Request.CompilerVersion
 	if compilerVersion != nil {
 		f.PackageComment(fmt.Sprintf("    protoc %s", compilerVersion.String()))
 	} else {
@@ -336,10 +336,6 @@ func operationNameConst(svc *protogen.Service, method *protogen.Method) string {
 
 func operationVar(svc *protogen.Service, method *protogen.Method) string {
 	return fmt.Sprintf("%s%sOperation", svc.GoName, method.GoName)
-}
-
-func operationStartResult(svc *protogen.Service, method *protogen.Method) string {
-	return fmt.Sprintf("%s%sOperationStartResult", svc.GoName, method.GoName)
 }
 
 // operationOptions returns the OperationOptions for the given proto Method
