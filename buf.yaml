@@ -2,7 +2,7 @@ version: v2
 modules:
   - path: example/proto
 deps:
-  - buf.build/bergundy/nexus
+  - buf.build/temporalio/nexus-annotations
 lint:
   use:
     - BASIC

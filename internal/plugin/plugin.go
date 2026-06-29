@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	nexusv1 "github.com/bergundy/nexus-proto-annotations/go/nexus/v1"
+	nexusv1 "github.com/nexus-rpc/nexus-proto-annotations/go/nexusannotations/v1"
 	"github.com/dave/jennifer/jen"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/compiler/protogen"

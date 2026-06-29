@@ -4,7 +4,7 @@ package example.v1;
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/go_features.proto";
-import "nexus/v1/options.proto";
+import "nexusannotations/v1/options.proto";
 
 option features.(pb.go).api_level = API_HYBRID;
 option features.field_presence = IMPLICIT;
@@ -19,7 +19,7 @@ message ExampleOutput {
 }
 
 service OneWay {
-  option (nexus.v1.service).tags = "gen";
+  option (nexusannotations.v1.service).tags = "gen";
 
   rpc NoInput(google.protobuf.Empty) returns (ExampleOutput);
 
@@ -28,24 +28,24 @@ service OneWay {
 
 service TwoWay {
   // Also test options.
-  option (nexus.v1.service).name = "example.v1.two-way";
-  option (nexus.v1.service).tags = "gen";
+  option (nexusannotations.v1.service).name = "example.v1.two-way";
+  option (nexusannotations.v1.service).tags = "gen";
 
   rpc Example(ExampleInput) returns (ExampleOutput) {
     // Also test options.
-    option (nexus.v1.operation).name = "example";
+    option (nexusannotations.v1.operation).name = "example";
   }
 }
 
 service ExcludeMe {
   // both gen and no-gen tagged, no-gen wins.
-  option (nexus.v1.service).tags = "gen";
-  option (nexus.v1.service).tags = "no-gen";
+  option (nexusannotations.v1.service).tags = "gen";
+  option (nexusannotations.v1.service).tags = "no-gen";
 
   rpc Example(ExampleInput) returns (ExampleOutput) {}
 
   rpc ExcludeMe(ExampleInput) returns (ExampleOutput) {
-    option (nexus.v1.operation).tags = "no-gen";
+    option (nexusannotations.v1.operation).tags = "no-gen";
   }
 }
 
@@ -54,18 +54,18 @@ service ExcludeMeBecauseIAmUntagged {
 }
 
 service ExcludeMeBecauseMyOperationsAreExcluded {
-  option (nexus.v1.service).tags = "gen";
+  option (nexusannotations.v1.service).tags = "gen";
 
   rpc Example(ExampleInput) returns (ExampleOutput) {
-    option (nexus.v1.operation).tags = "no-gen";
+    option (nexusannotations.v1.operation).tags = "no-gen";
   }
 }
 
 service IncludeWithExcludedMethods {
-  option (nexus.v1.service).tags = "gen";
+  option (nexusannotations.v1.service).tags = "gen";
 
   rpc Example(ExampleInput) returns (ExampleOutput) {
-    option (nexus.v1.operation).tags = "no-gen";
+    option (nexusannotations.v1.operation).tags = "no-gen";
   }
 
   rpc IncludeMe(ExampleInput) returns (ExampleOutput);
